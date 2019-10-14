@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+
+flocked_unpack() {
+  local tarball=$1
+  local packagedir=$2
+  local checksumfile=$3
+
+  local envdir=$(dirname ${packagedir})
+  local checksumdir=$(dirname ${checksumfile})
+
+  ( flock -w 900 9 || exit  1
+    test -d $packagedir || \
+        (cd ${envdir}; md5sum ${tarball} > ${checksumfile}; tar xf ${tarball})
+    md5sum --status -c ${checksumfile} || \
+        (rm -rf ${packagedir}; cd ${envdir}; mkdir -p ${checksumdir}; md5sum ${tarball} > ${checksumfile}; tar xf ${tarball})
+  ) 9>${packagedir}.lck
+}
+
+if [[ $(hostname) == "globemaster.ssec.wisc.edu" ]]; then
+    ENV_DIRP_STR=$HOME/scratch/willemm/env
+else
+    ENV_DIRP_STR=/scratch/willemm/env
+fi
+mkdir -p $ENV_DIRP_STR
+
+# Unpack anaconda
+CONDA_PCKG_DIRP_STR={{conda_pckg_manifest_obj.dst_dirP_str}}
+CONDA_PCKG_FILEP_STR={{conda_pckg_manifest_obj.dst_tar_fileP_str}}
+CONDA_CHECKSUM_FILEP_STR={{conda_pckg_manifest_obj.checksum_fileP_str}}
+flocked_unpack $CONDA_PCKG_FILEP_STR $CONDA_PCKG_DIRP_STR $CONDA_CHECKSUM_FILEP_STR
+
+# Unpack the list of python packages
+{% for pckg_manifest_obj in pckg_manifest_obj_lst %}
+    PCKG_{{pckg_manifest_obj.name}}_DIRP_STR=pckg_manifest_obj.dst_dirP_str
+    PCKG_{{pckg_manifest_obj.name}}_FILEP_STR=pckg_manifest_obj.dst_tar_fileP_str
+    PCKG_{{pckg_manifest_obj.name}}_CHECKSUM_FILEP_STR=pckg_manifest_obj.checksum_fileP_str
+    flocked_unpack $PCKG_{{pckg_manifest_obj.name}}_DIRP_STR \
+        $PCKG_{{pckg_manifest_obj.name}}_FILEP_STR \
+        $PCKG_{{pckg_manifest_obj.name}}_CHECKSUM_FILEP_STR
+{% endfor %}
+
+# >>> conda init >>>
+# !! Contents within this block are managed by 'conda init' !!
+__conda_setup="$(CONDA_REPORT_ERRORS=false $CONDA_PCKG_DIRP_STR/bin/conda shell.bash hook 2> /dev/null)"
+if [ $? -eq 0 ]; then
+   eval "$__conda_setup"
+else
+   if [ -f "$CONDA_PCKG_DIRP_STR/etc/profile.d/conda.sh" ]; then
+       . "$CONDA_PCKG_DIRP_STR/etc/profile.d/conda.sh"
+       CONDA_CHANGEPS1=false conda activate base
+   else
+       export PATH="$CONDA_PCKG_DIRP_STR/bin:$PATH"
+   fi
+fi
+unset __conda_setup
+# <<< conda init <<<
+
+echo '------------------------------ BEGIN - printenv ------------------------------'
+printenv
+echo '------------------------------ END -   printenv ------------------------------'
+
+echo '------------------------------ BEGIN - conda checksum ------------------------------'
+if test -f $CONDA_CHECKSUM_FILEP_STR; then
+    cat $CONDA_CHECKSUM_FILEP_STR
+else
+    echo "The conda checksum file $CONDA_CHECKSUM_FILEP_STR does not exists."
+    exit 1
+fi
+echo '------------------------------ END   - conda checksum ------------------------------'
+
+echo '------------------------------ BEGIN - Python package checksum ------------------------------'
+if test -f $CONDA_CHECKSUM_FILEP_STR; then
+    cat $CONDA_CHECKSUM_FILEP_STR
+else
+    echo "The Python package checksum file $CONDA_CHECKSUM_FILEP_STR does not exists."
+    exit 1
+fi
+echo '------------------------------ END   - Python package checksum ------------------------------'
+
+# Set the environmental variables
+{% for env_obj in env_obj_lst %}
+    export {{env_obj.name}}={{env_obj.value}}
+{% endfor %}
+
+PYTHON_EXE_STR=$CONDA_PCKG_DIRP_STR/bin/python
+$PYTHON_EXE_STR $@

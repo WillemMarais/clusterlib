@@ -1,0 +1,23 @@
+---
+CondaPackageManifest:
+  src_dirP_str: "src_dirP_str"
+  dst_tar_fileP_str: "dst_tar_fileP_str"
+  dst_dirP_str: "dst_dirP_str"
+  checksum_fileP_str: "checksum_fileP_str"
+PackageManifest:
+  name:
+    name: "name"
+    src_dirP_str: "src_dirP_str"
+    dst_tar_fileP_str: "dst_tar_fileP_str"
+    dst_dirP_str: "dst_dirP_str"
+    checksum_fileP_str: "checksum_fileP_str"
+  name:
+    name: "name"
+    src_dirP_str: "src_dirP_str"
+    dst_tar_fileP_str: "dst_tar_fileP_str"
+    dst_dirP_str: "dst_dirP_str"
+    checksum_fileP_str: "checksum_fileP_str"
+IrisWrapperExecute:
+  env_dct:
+    env_name: "str"
+...
