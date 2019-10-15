@@ -1,12 +1,14 @@
 import os
-import yaml
 import jinja2
 import shutil
+import logging
 import tarfile
 import tempfile
 from collections import namedtuple
 from typing import Dict, List, Tuple, Union
 from clusterlib.utilities import get_dirP_of__file__
+
+log_obj = logging.getLogger(__name__)
 
 
 class PackageManifest:
@@ -64,7 +66,9 @@ class PackageManifest:
             # Copy ther python package directory to the temporary directory
             out_dirN_str = os.path.basename(self.src_dirP_str)
             out_dirP_str = os.path.join(str(tmp_dir_obj), out_dirN_str)
-            shutil.copytree(self.src_dirP_str, out_dirP_str, ignore=shutil.ignore_patterns('.git'))
+            shutil.copytree(self.src_dirP_str,
+                            out_dirP_str,
+                            ignore=shutil.ignore_patterns('.git', '.*', '__pycache__', '*.pyc'))
 
             # Change directory to the temporary directory
             current_dirP_str = os.getcwd()
@@ -93,7 +97,7 @@ class IrisWrapperExecute:
                  conda_pckg_manifest_obj: PackageManifest = None,
                  pckg_manifest_obj_lst: List[PackageManifest] = None,
                  env_dct: Dict[str, str] = None,
-                 yaml_cfg_fileP_str: str = None):
+                 yaml_cfg_dct: dict = None):
         """
 
         Parameter
@@ -104,22 +108,23 @@ class IrisWrapperExecute:
             A list of package manifests.
         env_dct: dict of str
             Environmental variables that has to be set in the wrapper script.
-        yaml_cfg_fileP_str: str
-            The yaml config file that has the information regarding `conda_pckg_manifest_obj`,
-            `pckg_manifest_obj_lst` and `env_dct` if none of these have been provided."""
+        yaml_cfg_dct: dict
+            The yaml config dictionary that has the information regarding `conda_pckg_manifest_obj`,
+            `pckg_manifest_obj_lst` and `env_dct` if none of these have been provided; refer to
+            `clusterlib/templates/iris_wrapper_exe_eg.yaml` for an example."""
 
         if (conda_pckg_manifest_obj is None) and (pckg_manifest_obj_lst is None) and (env_dct is None):
-            if yaml_cfg_fileP_str is None:
-                err_str = 'The YAML configuration file has to be provided if no other ' \
+            if yaml_cfg_dct is None:
+                err_str = 'The YAML configuration dictionary has to be provided if no other ' \
                     + 'parameters are provided.'
                 raise ValueError(err_str)
 
-            elif os.path.exists(yaml_cfg_fileP_str) is False:
-                err_str = f'Could not find the file "{yaml_cfg_fileP_str}"'
-                raise FileNotFoundError(err_str)
+            elif isinstance(yaml_cfg_dct, dict) is False:
+                err_str = 'The parameter "yaml_cfg_dct" is not a dictionary.'
+                raise ValueError(err_str)
 
             conda_pckg_manifest_obj, pckg_manifest_obj_lst, env_dct = \
-                self._read_yaml_cfg(yaml_cfg_fileP_str)
+                self._read_yaml_cfg(yaml_cfg_dct)
 
         self.conda_pckg_manifest_obj = conda_pckg_manifest_obj
         self.pckg_manifest_obj_lst = pckg_manifest_obj_lst
@@ -133,11 +138,7 @@ class IrisWrapperExecute:
             raise FileNotFoundError(err_str)
 
     @staticmethod
-    def _read_yaml_cfg(yaml_cfg_fileP_str) -> Tuple[PackageManifest, List[PackageManifest], dict]:
-        # Read the YAML config file
-        with open(yaml_cfg_fileP_str, 'r') as file_obj:
-            yaml_cfg_dct = yaml.load(stream=file_obj)
-
+    def _read_yaml_cfg(yaml_cfg_dct: dict) -> Tuple[PackageManifest, List[PackageManifest], dict]:
         # Create the conda package manifest
         conda_pkcg_manifest_obj = PackageManifest(**yaml_cfg_dct['CondaPackageManifest'])
 
@@ -150,6 +151,11 @@ class IrisWrapperExecute:
         env_dct = yaml_cfg_dct['IrisWrapperExecute']['env_dct']
 
         return conda_pkcg_manifest_obj, pkcg_manifest_obj_lst, env_dct
+
+    def package(self):
+        for pckg_manifest_obj in self.pckg_manifest_obj_lst:
+            log_obj.info(f'Packing for manifest "{pckg_manifest_obj.name_str}"')
+            pckg_manifest_obj.package()
 
     def create(self, dst_fileP_str: str = None) -> Union[str, None]:
         """Create the execute wrapper script, to be executed on iris.
