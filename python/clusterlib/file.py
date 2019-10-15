@@ -68,7 +68,7 @@ class TFile:
         self.transcended_fileP_str = fileP_str
         if (tmp_dirP_str is None) or (isinstance(tmp_dirP_str, str) is False):
             self.temp_dirP_obj = tempfile.TemporaryDirectory()
-            self.temp_dirP_str = str(self.temp_dirP_obj)
+            self.temp_dirP_str = self.temp_dirP_obj.name
         else:
             self.temp_dirP_obj = None
             self.temp_dirP_str = tmp_dirP_str
@@ -80,6 +80,9 @@ class TFile:
 
         self.overwrite_bl = overwrite_bl
         self.do_nothing_bl = do_nothing_bl
+
+    def __str__(self):
+        return self.local_fileP_str
 
     def copyfrom(self):
         """Copy the file from the remote file system."""
