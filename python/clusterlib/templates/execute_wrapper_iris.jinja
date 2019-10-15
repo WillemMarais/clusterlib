@@ -27,16 +27,20 @@ mkdir -p $ENV_DIRP_STR
 CONDA_PCKG_DIRP_STR={{conda_pckg_manifest_obj.dst_dirP_str}}
 CONDA_PCKG_FILEP_STR={{conda_pckg_manifest_obj.dst_tar_fileP_str}}
 CONDA_CHECKSUM_FILEP_STR={{conda_pckg_manifest_obj.checksum_fileP_str}}
+mkdir -p $(dirname ${CONDA_PCKG_DIRP_STR})
 flocked_unpack $CONDA_PCKG_FILEP_STR $CONDA_PCKG_DIRP_STR $CONDA_CHECKSUM_FILEP_STR
 
 # Unpack the list of python packages
 {% for pckg_manifest_obj in pckg_manifest_obj_lst %}
-    PCKG_{{pckg_manifest_obj.name}}_DIRP_STR=pckg_manifest_obj.dst_dirP_str
-    PCKG_{{pckg_manifest_obj.name}}_FILEP_STR=pckg_manifest_obj.dst_tar_fileP_str
-    PCKG_{{pckg_manifest_obj.name}}_CHECKSUM_FILEP_STR=pckg_manifest_obj.checksum_fileP_str
-    flocked_unpack $PCKG_{{pckg_manifest_obj.name}}_DIRP_STR \
-        $PCKG_{{pckg_manifest_obj.name}}_FILEP_STR \
-        $PCKG_{{pckg_manifest_obj.name}}_CHECKSUM_FILEP_STR
+# ------------ Package {{pckg_manifest_obj.name_str}} ------------
+PCKG_{{pckg_manifest_obj.name_str}}_DIRP_STR={{pckg_manifest_obj.dst_dirP_str}}
+PCKG_{{pckg_manifest_obj.name_str}}_FILEP_STR={{pckg_manifest_obj.dst_tar_fileP_str}}
+PCKG_{{pckg_manifest_obj.name_str}}_CHECKSUM_FILEP_STR={{pckg_manifest_obj.checksum_fileP_str}}
+mkdir -p $(dirname ${PCKG_{{pckg_manifest_obj.name_str}}_DIRP_STR})
+flocked_unpack $PCKG_{{pckg_manifest_obj.name_str}}_FILEP_STR \
+    $PCKG_{{pckg_manifest_obj.name_str}}_DIRP_STR \
+    $PCKG_{{pckg_manifest_obj.name_str}}_CHECKSUM_FILEP_STR
+
 {% endfor %}
 
 # >>> conda init >>>
@@ -68,19 +72,23 @@ else
 fi
 echo '------------------------------ END   - conda checksum ------------------------------'
 
-echo '------------------------------ BEGIN - Python package checksum ------------------------------'
-if test -f $CONDA_CHECKSUM_FILEP_STR; then
-    cat $CONDA_CHECKSUM_FILEP_STR
+{% for pckg_manifest_obj in pckg_manifest_obj_lst %}
+echo '------------------------------ BEGIN - Python package '{{pckg_manifest_obj.name_str}}'  checksum ------------------------------'
+if test -f $PCKG_{{pckg_manifest_obj.name_str}}_CHECKSUM_FILEP_STR; then
+    cat $PCKG_{{pckg_manifest_obj.name_str}}_CHECKSUM_FILEP_STR
 else
-    echo "The Python package checksum file $CONDA_CHECKSUM_FILEP_STR does not exists."
+    echo "The Python package checksum file "$PCKG_{{pckg_manifest_obj.name_str}}_CHECKSUM_FILEP_STR" does not exists."
     exit 1
 fi
-echo '------------------------------ END   - Python package checksum ------------------------------'
+echo '------------------------------ END - Python package '{{pckg_manifest_obj.name_str}}'  checksum ------------------------------'
+
+{% endfor %}
 
 # Set the environmental variables
 {% for env_obj in env_obj_lst %}
-    export {{env_obj.name}}={{env_obj.value}}
+export {{env_obj.name}}={{env_obj.value}}
 {% endfor %}
 
 PYTHON_EXE_STR=$CONDA_PCKG_DIRP_STR/bin/python
+echo "About the execute: $PYTHON_EXE_STR $@"
 $PYTHON_EXE_STR $@
