@@ -10,7 +10,7 @@ flocked_unpack() {
 
   ( flock -w 900 9 || exit  1
     test -d $packagedir || \
-        (cd ${envdir}; md5sum ${tarball} > ${checksumfile}; tar xf ${tarball})
+        (mkdir -p ${envdir}; cd ${envdir}; mkdir -p ${checksumdir}; md5sum ${tarball} > ${checksumfile}; tar xf ${tarball})
     md5sum --status -c ${checksumfile} || \
         (rm -rf ${packagedir}; cd ${envdir}; mkdir -p ${checksumdir}; md5sum ${tarball} > ${checksumfile}; tar xf ${tarball})
   ) 9>${packagedir}.lck
