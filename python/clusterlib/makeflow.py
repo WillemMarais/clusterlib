@@ -12,6 +12,7 @@ class Category:
 
     def __init__(self, category_name_str: str, cores_int: int, mem_MB_int: int):
         """
+
         Parameters
         ----------
         category_name_str: str
@@ -19,7 +20,8 @@ class Category:
         cores_int: int
             The number of CPU cores for the process.
         mem_MB_int: int
-            The amount of mega-bytes of memory that is available for the process."""
+            The amount of mega-bytes of memory that is available for the process.
+        """
 
         self.category_name_str = category_name_str
         self.cores_int = cores_int
@@ -31,6 +33,30 @@ class Category:
 }}"""
 
         return category_str.format(self.category_name_str, self.cores_int, self.mem_MB_int)
+
+
+class Environment:
+    """Specify the environment variables; specific information about the environment variables are
+    described in https://ccl.cse.nd.edu/software/manuals/jx.html."""
+
+    def __init__(self, env_name_str: str, value_str: str):
+        """
+
+        Parameters
+        ----------
+        env_name_str: str
+            The environmental variable name.
+        value_str: str
+            The value of the environmental variable.
+        """
+
+        self.env_name_str = env_name_str
+        self.value_str = value_str
+
+    def __str__(self):
+        environment_str = '{:s}: "{:s}"'
+
+        return environment_str.format(self.env_name_str, self.value_str)
 
 
 class Rule:
@@ -171,8 +197,14 @@ class JxMakeflow:
     """Create JX formatted makeflow strings."""
 
     def __init__(self):
+        self.environment_obj_lst = []
         self.category_obj_lst = []
         self.rule_obj_lst = []
+
+    def add_environment(self, environment_obj: Environment):
+        """Add an environment."""
+
+        self.environment_obj_lst.append(environment_obj)
 
     def add_category(self, category_obj: Category):
         """Add a resource category."""
@@ -204,6 +236,16 @@ class JxMakeflow:
             for category_obj in self.category_obj_lst[1:]:
                 out_str += ','
                 out_str += self._indent_lines('\n' + str(category_obj), 2 * tab_size_int)
+
+            out_str += self._indent_lines('\n},', tab_size_int)
+
+        if len(self.environment_obj_lst) > 0:
+            out_str += self._indent_lines('\n"environment": {', tab_size_int)
+            out_str += self._indent_lines('\n' + str(self.environment_obj_lst[0]), 2 * tab_size_int)
+
+            for environment_obj in self.environment_obj_lst:
+                out_str += ','
+                out_str += self._indent_lines('\n' + str(environment_obj), 2 * tab_size_int)
 
             out_str += self._indent_lines('\n},', tab_size_int)
 
