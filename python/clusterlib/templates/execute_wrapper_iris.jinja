@@ -90,5 +90,4 @@ export {{env_obj.name}}={{env_obj.value}}
 {% endfor %}
 
 PYTHON_EXE_STR=$CONDA_PCKG_DIRP_STR/bin/python
-echo "About the execute: $PYTHON_EXE_STR $@"
-$PYTHON_EXE_STR $@
+/usr/bin/time -v $PYTHON_EXE_STR $@
