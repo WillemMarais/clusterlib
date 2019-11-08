@@ -67,7 +67,9 @@ class TFile:
 
         self.transcended_fileP_str = fileP_str
         if (tmp_dirP_str is None) or (isinstance(tmp_dirP_str, str) is False):
-            self.temp_dirP_obj = tempfile.TemporaryDirectory()
+            _tmp_str = os.path.join(get_scratch_dirP(add_pid_bl=False), 'TFile')
+            os.makedirs(_tmp_str, exist_ok=True)
+            self.temp_dirP_obj = tempfile.TemporaryDirectory(dir=_tmp_str)
             self.temp_dirP_str = self.temp_dirP_obj.name
         else:
             self.temp_dirP_obj = None

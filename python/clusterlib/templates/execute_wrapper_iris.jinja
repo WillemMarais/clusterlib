@@ -21,7 +21,7 @@ flocked_unpack() {
          mkdir -p ${checksumdir}; \
          md5sum ${tarball} > ${checksumfile}; \
          tar xf ${tarball} --touch)
-    tar xf ${tarball} --skip-old-files --touch
+    (cd ${envdir}; tar xf ${tarball} --skip-old-files --touch)
   ) 9>${packagedir}.lck
 }
 
