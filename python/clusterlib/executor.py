@@ -385,6 +385,9 @@ class MakeflowFromStages:
     def __init__(self,
                  parm_dirP_str: str,
                  wrapper_bash_scrpt_fileP_str: str,
+                 graph_stage_dct: Dict[str, Tuple[StageAbstract, StageAbstractCollection_type]],
+                 makeflow_out_fileP_str: str,
+                 py_caller_script_fileP_str: str,
                  cat_obj: makeflow.Category = None,
                  yaml_cfg_dct: dict = None):
         """
@@ -395,6 +398,12 @@ class MakeflowFromStages:
             The parameter directory path of where to archive the parameter YAML files for the stage execution.
         wrapper_bash_scrpt_fileP_str: str
             The iris bash wrapper script executable for the python script.
+        graph_stage_dct: Dict[str, Tuple[StageAbstract, StageAbstractCollection_type]]
+            The graph of the stages.
+        makeflow_out_fileP_str: str
+            The output file path of the makeflow file.
+        py_caller_script_fileP_str: str
+            The file path location where the python wrapper script is stored.
         cat_obj: makeflow.Category
             A Makeflow category object; optional.
         yaml_cfg_dct: dict
@@ -408,20 +417,83 @@ class MakeflowFromStages:
             }
         """
 
-        self.parm_dirP_str = parm_dirP_str
-        self.wrapper_bash_scrpt_fileP_str = wrapper_bash_scrpt_fileP_str
-        self.cat_obj = cat_obj
+        self.parm_dirP_str_lst: List[str] = [parm_dirP_str]
+        self.wrapper_bash_scrpt_fileP_str_lst: List[str] = [wrapper_bash_scrpt_fileP_str]
+        self.cat_obj_lst: List[makeflow.Category] = [cat_obj]
+        self.graph_stage_dct_lst: List[Dict[str, Tuple[StageAbstract, StageAbstractCollection_type]]] = [graph_stage_dct]
+        self.makeflow_out_fileP_str_lst: List[str] = [makeflow_out_fileP_str]
+        self.py_caller_script_fileP_str_lst: List[str] = [py_caller_script_fileP_str]
 
         if yaml_cfg_dct is None:
-            self.yaml_cfg_dct = dict()
+            self.yaml_cfg_dct_lst: List[Union[dict, None]] = [dict()]
         else:
-            self.yaml_cfg_dct = yaml_cfg_dct
+            self.yaml_cfg_dct_lst: List[Union[dict, None]] = [yaml_cfg_dct]
+
+    def extend(self, makeflow_stages_obj):
+        self.parm_dirP_str_lst.extend(makeflow_stages_obj.parm_dirP_str_lst)
+        self.wrapper_bash_scrpt_fileP_str_lst.extend(makeflow_stages_obj.wrapper_bash_scrpt_fileP_str_lst)
+        self.cat_obj_lst.extend(makeflow_stages_obj.cat_obj_lst)
+
+        self.graph_stage_dct_lst.extend(makeflow_stages_obj.graph_stage_dct_lst)
+        self.makeflow_out_fileP_str_lst.extend(makeflow_stages_obj.makeflow_out_fileP_str_lst)
+        self.py_caller_script_fileP_str_lst.extend(makeflow_stages_obj.py_caller_script_fileP_str_lst)
+        self.yaml_cfg_dct_lst.extend(makeflow_stages_obj.yaml_cfg_dct_lst)
+
+    def create(self, makeflow_out_fileP_str: str):
+        """Create the Makeflow JX file.
+
+        Parameters
+        ----------
+        makeflow_out_fileP_str: str
+            The output file path of the makeflow file."""
+
+        # Create the makeflow JX file creator
+        makeflow_jx_creator_obj = makeflow.JxMakeflow()
+
+        for parm_dirP_str, wrapper_bash_scrpt_fileP_str, cat_obj, graph_stage_dct, \
+            py_caller_script_fileP_str in zip(self.parm_dirP_str_lst,
+                                              self.wrapper_bash_scrpt_fileP_str_lst,
+                                              self.cat_obj_lst,
+                                              self.graph_stage_dct_lst,
+                                              self.py_caller_script_fileP_str_lst):
+
+            # Create the keyword dictionary for the makeflow rule function
+            kwargs_dct = {
+                'parm_dirP_fileP_str': parm_dirP_str,
+                'py_caller_script_fileP_str': py_caller_script_fileP_str,
+                'wrapper_bash_scrpt_fileP_str': wrapper_bash_scrpt_fileP_str,
+                'cat_obj': cat_obj
+            }
+
+            makeflow_jx_creator_obj.add_category(cat_obj)
+
+            # Add the rules to the makeflow JX file creator
+            for stage_obj, _ in graph_stage_dct.values():
+                makeflow_jx_creator_obj.add_rule(stage_obj.crt_makeflow_rule(**kwargs_dct))
+
+        # Write out the makeflow file
+        os.makedirs(os.path.dirname(makeflow_out_fileP_str), exist_ok=True)
+        with open(makeflow_out_fileP_str, 'w') as file_obj:
+            file_obj.write(makeflow_jx_creator_obj.get_str())
+
+        # Write the bash script thats execute the makeflow file
+        bash_makeflow_fileP_str = os.path.join(os.path.dirname(makeflow_out_fileP_str),
+                                               'run_' + os.path.basename(makeflow_out_fileP_str) + '.bash')
+        self._create_makeflow_bash_command(makeflow_out_fileP_str,
+                                           bash_makeflow_fileP_str)
+
+        # Make the makeflow bash script executable
+        st_obj = os.stat(bash_makeflow_fileP_str)
+        os.chmod(bash_makeflow_fileP_str, st_obj.st_mode | stat.S_IXUSR)
 
     def _get_command_options(self) -> dict:
-        if 'command_options' in self.yaml_cfg_dct:
-            return self.yaml_cfg_dct['command_options']
-        else:
-            return dict()
+        return_dct = dict()
+
+        for yaml_cfg_dct in self.yaml_cfg_dct_lst:
+            if 'command_options' in yaml_cfg_dct:
+                return_dct.update(yaml_cfg_dct['command_options'])
+
+        return return_dct
 
     def _create_makeflow_bash_command(self, makeflow_fileP_str: str, out_fileP_str: str):
         out_str = """#!/usr/bin/env bash
@@ -439,50 +511,3 @@ makeflow"""
 
         with open(out_fileP_str, 'w') as file_obj:
             file_obj.write(out_str)
-
-    def create(self,
-               graph_stage_dct: Dict[str, Tuple[StageAbstract, StageAbstractCollection_type]],
-               makeflow_out_fileP_str: str,
-               py_caller_script_fileP_str: str):
-        """Create the Makeflow JX file.
-
-        Parameters
-        ----------
-        graph_stage_dct: Dict[str, Tuple[StageAbstract, StageAbstractCollection_type]]
-            The graph of the stages.
-        makeflow_out_fileP_str: str
-            The output file path of the makeflow file.
-        py_caller_script_fileP_str: str
-            The file path location where the python wrapper script is stored.
-        """
-
-        # Create the keyword dictionary for the makeflow rule function
-        kwargs_dct = {
-            'parm_dirP_fileP_str': self.parm_dirP_str,
-            'py_caller_script_fileP_str': py_caller_script_fileP_str,
-            'wrapper_bash_scrpt_fileP_str': self.wrapper_bash_scrpt_fileP_str,
-            'cat_obj': self.cat_obj
-        }
-
-        # Create the makeflow JX file creator
-        makeflow_jx_creator_obj = makeflow.JxMakeflow()
-        makeflow_jx_creator_obj.add_category(self.cat_obj)
-
-        # Add the rules to the makeflow JX file creator
-        for stage_obj, _ in graph_stage_dct.values():
-            makeflow_jx_creator_obj.add_rule(stage_obj.crt_makeflow_rule(**kwargs_dct))
-
-        # Write out the makeflow file
-        os.makedirs(os.path.dirname(makeflow_out_fileP_str), exist_ok=True)
-        with open(makeflow_out_fileP_str, 'w') as file_obj:
-            file_obj.write(makeflow_jx_creator_obj.get_str())
-
-        # Write the bash script thats execute the makeflow file
-        bash_makeflow_fileP_str = os.path.join(os.path.dirname(makeflow_out_fileP_str),
-                                               'run_' + os.path.basename(makeflow_out_fileP_str) + '.bash')
-        self._create_makeflow_bash_command(makeflow_out_fileP_str,
-                                           bash_makeflow_fileP_str)
-
-        # Make the makeflow bash script executable
-        st_obj = os.stat(bash_makeflow_fileP_str)
-        os.chmod(bash_makeflow_fileP_str, st_obj.st_mode | stat.S_IXUSR)
