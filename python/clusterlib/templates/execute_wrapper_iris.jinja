@@ -25,12 +25,12 @@ flocked_unpack() {
   ) 9>${packagedir}.lck
 }
 
-if [[ $(hostname) == "globemaster.ssec.wisc.edu" ]]; then
-    ENV_DIRP_STR=$HOME/scratch/willemm/env
-else
-    ENV_DIRP_STR=/scratch/willemm/env
-fi
-mkdir -p $ENV_DIRP_STR
+# if [[ $(hostname) == "globemaster.ssec.wisc.edu" ]]; then
+#     ENV_DIRP_STR=$HOME/scratch/willemm/env
+# else
+#     ENV_DIRP_STR=/scratch/willemm/env
+# fi
+# mkdir -p $ENV_DIRP_STR
 
 # Unpack anaconda
 CONDA_PCKG_DIRP_STR={{conda_pckg_manifest_obj.dst_dirP_str}}
