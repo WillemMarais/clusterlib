@@ -15,8 +15,11 @@ class PackageManifest:
     """Specification of a package manifest; this class is to be used with the class
     IrisWrapperExecute."""
 
-    def __init__(self, name_str: str = None, src_dirP_str: str = None,
-                 dst_tar_fileP_str: str = None, dst_dirP_str: str = None,
+    def __init__(self,
+                 name_str: str = None,
+                 src_dirP_str: str = None,
+                 dst_tar_fileP_str: str = None,
+                 dst_dirP_str: str = None,
                  checksum_fileP_str: str = None):
         """
 
@@ -46,10 +49,6 @@ class PackageManifest:
                 + f'distination file path "{dst_tar_fileP_str}"'
 
             raise FileNotFoundError(err_str)
-        # elif os.path.exists(src_dirP_str) is False:
-        #     err_str = 'The directory "src_dirP_str" does not exists.'
-
-        #     raise FileNotFoundError(err_str)
 
         self.src_dirP_str = src_dirP_str
         self.dst_tar_fileP_str = dst_tar_fileP_str
@@ -148,7 +147,7 @@ class IrisWrapperExecute:
             pkcg_manifest_obj_lst.append(PackageManifest(**manifest_cfg_dct))
 
         # Get the environment dictionary
-        env_dct = yaml_cfg_dct['IrisWrapperExecute']['env_dct']
+        env_dct = yaml_cfg_dct['WrapperExecute']['env_dct']
 
         return conda_pkcg_manifest_obj, pkcg_manifest_obj_lst, env_dct
 
@@ -194,3 +193,36 @@ class IrisWrapperExecute:
                 file_obj.write(template_bash_obj.render(**kwargs_dct))
         else:
             return template_bash_obj.render(**kwargs_dct)
+
+
+class PlainWrapperExecute:
+    """Creator of the plain bash wrapper execute script."""
+
+    template_fileN_str = 'execute_wrapper_plain.jinja'
+
+    def __init__(self, env_dct: Dict[str, str] = None):
+        self.env_dct = env_dct
+
+        # Create to file path to the jinja file
+        dirP_str = os.path.join(get_dirP_of__file__(__file__), 'templates')
+        self.template_fileP_str = os.path.join(dirP_str, self.template_fileN_str)
+        if os.path.exists(self.template_fileP_str) is False:
+            err_str = f'The Jinja2 template file "{self.template_fileP_str}" does not exists.'
+            raise FileNotFoundError(err_str)
+
+    def create(self, dst_fileP_str: str = None) -> Union[str, None]:
+        # Create the named tuple enviroment list
+        env_obj_cls = namedtuple('env_obj', ['name', 'value'])
+        env_obj_lst = []
+        for key_str, item_str in self.env_dct.items():
+            env_obj_lst.append(env_obj_cls(name=key_str, value=item_str))
+
+        # Read in the Jinja template for the bash file
+        with open(self.template_fileP_str, 'r') as file_obj:
+            template_bash_obj = jinja2.Template(file_obj.read(), trim_blocks=True)
+
+        if dst_fileP_str is not None:
+            with open(dst_fileP_str, 'w') as file_obj:
+                file_obj.write(template_bash_obj.render(env_obj_lst=env_obj_lst))
+        else:
+            return template_bash_obj.render(env_obj_lst=env_obj_lst)

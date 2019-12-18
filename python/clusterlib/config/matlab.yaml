@@ -1,0 +1,9 @@
+---
+matlab:
+  default:
+    version: r2019a
+    location: /opt/matlab
+  globemaster.ssec.wisc.edu:
+    version: r2019a
+    location: /opt/matlab
+...

@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+
+echo '----------------------------------------------- BEGIN - printenv  -----------------------------------------------'
+printenv
+echo '----------------------------------------------- END -   printenv  -----------------------------------------------'
+
+# Set the environmental variables
+{% for env_obj in env_obj_lst %}
+export {{env_obj.name}}={{env_obj.value}}
+{% endfor %}
+
+PYTHON_EXE_STR=$(which python)
+/usr/bin/time -v $PYTHON_EXE_STR $@

@@ -86,7 +86,9 @@ class Stage(StageAbstract):
                  py_func: Callable,
                  input_parm_obj_dct: Dict[str, Union[int, float, str, StageFile, List[StageFile]]],
                  output_file_dct: Dict[str, StageFile],
-                 log_fileN_str: str):
+                 log_fileN_str: str,
+                 nr_cores_int: int = 1,
+                 mem_MB_int: int = 1024):
         """
 
         Parameter
@@ -104,7 +106,12 @@ class Stage(StageAbstract):
         output_fileP_str_dct: dict of str
             List of named output files for the stage.
         log_fileN_str: str
-            Name of the log file."""
+            Name of the log file.
+        nr_cores_int: int
+            The number of CPU cores for the process; default is 1.
+        mem_MB_int: int
+            The amount of mega-bytes of memory that is available for the process; default is 1 GB.
+        """
 
         if inspect.isfunction(py_func) is False:
             err_str = 'The parameter "py_func" has to be a function.'
@@ -116,6 +123,8 @@ class Stage(StageAbstract):
         self.input_parm_obj_dct = input_parm_obj_dct
         self.output_file_dct = output_file_dct
         self.log_fileN_str = log_fileN_str
+        self.nr_cores_int = nr_cores_int
+        self.mem_MB_int = mem_MB_int
 
         # Make sure that the stage does not already exists in the graph
         if name_str in graph_stage_dct:
@@ -173,8 +182,10 @@ class Stage(StageAbstract):
             The makeflow rule."""
 
         if os.path.isdir(parm_dirP_fileP_str) is True:
+            # parm_fileP_str = os.path.join(parm_dirP_fileP_str,
+            #                               secrets.token_urlsafe(HASH_STRING_LENGTH_INT))
             parm_fileP_str = os.path.join(parm_dirP_fileP_str,
-                                          secrets.token_urlsafe(HASH_STRING_LENGTH_INT))
+                                          f'{self.name_str}_parameters.yaml')
         else:
             parm_fileP_str = parm_dirP_fileP_str
 
@@ -269,7 +280,7 @@ class Stage(StageAbstract):
 
         # Make a list of output files that are not present in self.output_file_dct
         if self.output_file_dct is not None:
-            for name_str, stage_file_obj in self.output_file_dct:
+            for name_str, stage_file_obj in self.output_file_dct.items():
                 parm_dct['output_fileP_str_dct'][name_str] = str(stage_file_obj)
 
         # Create the python wrapper script
@@ -297,6 +308,11 @@ class Stage(StageAbstract):
                 err_str = 'Not all the items of `input_fileP_str` are strings:\nFrom {:s} to {:s}'
                 raise ValueError(err_str.format(str(parm_dct['input_fileP_str_dct']),
                                                 str(input_fileP_str_lst)))
+
+        if cat_obj is None:
+            cat_obj = makeflow.Category(category_name_str=self.name_str,
+                                        cores_int=self.nr_cores_int,
+                                        mem_MB_int=self.mem_MB_int)
 
         # Create the makeflow rule object
         mf_rule_obj = makeflow.Rule(category_obj=cat_obj)
@@ -388,7 +404,7 @@ class MakeflowFromStages:
                  graph_stage_dct: Dict[str, Tuple[StageAbstract, StageAbstractCollection_type]],
                  makeflow_out_fileP_str: str,
                  py_caller_script_fileP_str: str,
-                 cat_obj: makeflow.Category = None,
+                 cat_obj: Union[makeflow.Category, None] = None,
                  yaml_cfg_dct: dict = None):
         """
 
@@ -419,7 +435,7 @@ class MakeflowFromStages:
 
         self.parm_dirP_str_lst: List[str] = [parm_dirP_str]
         self.wrapper_bash_scrpt_fileP_str_lst: List[str] = [wrapper_bash_scrpt_fileP_str]
-        self.cat_obj_lst: List[makeflow.Category] = [cat_obj]
+        self.cat_obj_lst: Union[List[Union[makeflow.Category, None]]] = [cat_obj]
         self.graph_stage_dct_lst: List[Dict[str, Tuple[StageAbstract, StageAbstractCollection_type]]] = [graph_stage_dct]
         self.makeflow_out_fileP_str_lst: List[str] = [makeflow_out_fileP_str]
         self.py_caller_script_fileP_str_lst: List[str] = [py_caller_script_fileP_str]
@@ -439,13 +455,20 @@ class MakeflowFromStages:
         self.py_caller_script_fileP_str_lst.extend(makeflow_stages_obj.py_caller_script_fileP_str_lst)
         self.yaml_cfg_dct_lst.extend(makeflow_stages_obj.yaml_cfg_dct_lst)
 
-    def create(self, makeflow_out_fileP_str: str):
+    def create(self, makeflow_out_fileP_str: str = None):
         """Create the Makeflow JX file.
 
         Parameters
         ----------
         makeflow_out_fileP_str: str
             The output file path of the makeflow file."""
+
+        if (makeflow_out_fileP_str is None) and (len(self.makeflow_out_fileP_str_lst) == 1):
+            makeflow_out_fileP_str = self.makeflow_out_fileP_str_lst[0]
+
+        elif makeflow_out_fileP_str is None:
+            err_str = 'Since multiple MakeflowFromStages objects have been combined, an output file has to be given'
+            raise ValueError(err_str)
 
         # Create the makeflow JX file creator
         makeflow_jx_creator_obj = makeflow.JxMakeflow()

@@ -68,28 +68,28 @@ fi
 unset __conda_setup
 # <<< conda init <<<
 
-echo '------------------------------ BEGIN - printenv ------------------------------'
+echo '----------------------------------------------- BEGIN - printenv  -----------------------------------------------'
 printenv
-echo '------------------------------ END -   printenv ------------------------------'
+echo '----------------------------------------------- END -   printenv  -----------------------------------------------'
 
-echo '------------------------------ BEGIN - conda checksum ------------------------------'
+echo '-------------------------------------------- BEGIN - conda checksum  --------------------------------------------'
 if test -f $CONDA_CHECKSUM_FILEP_STR; then
     cat $CONDA_CHECKSUM_FILEP_STR
 else
     echo "The conda checksum file $CONDA_CHECKSUM_FILEP_STR does not exists."
     exit 1
 fi
-echo '------------------------------ END   - conda checksum ------------------------------'
+echo '-------------------------------------------- END   - conda checksum  --------------------------------------------'
 
 {% for pckg_manifest_obj in pckg_manifest_obj_lst %}
-echo '------------------------------ BEGIN - Python package '{{pckg_manifest_obj.name_str}}'  checksum ------------------------------'
+echo '----------------------- BEGIN - Python package '{{pckg_manifest_obj.name_str}}'  checksum -----------------------'
 if test -f $PCKG_{{pckg_manifest_obj.name_str}}_CHECKSUM_FILEP_STR; then
     cat $PCKG_{{pckg_manifest_obj.name_str}}_CHECKSUM_FILEP_STR
 else
     echo "The Python package checksum file "$PCKG_{{pckg_manifest_obj.name_str}}_CHECKSUM_FILEP_STR" does not exists."
     exit 1
 fi
-echo '------------------------------ END - Python package '{{pckg_manifest_obj.name_str}}'  checksum ------------------------------'
+echo '------------------------ END - Python package '{{pckg_manifest_obj.name_str}}'  checksum ------------------------'
 
 {% endfor %}
 

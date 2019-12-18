@@ -3,7 +3,7 @@ https://ccl.cse.nd.edu/software/manuals/makeflow.html. The classes produce JX fo
 the specifications of the JX format is defined
 in: https://ccl.cse.nd.edu/software/manuals/jx.html."""
 
-from typing import List
+from typing import List, Union
 
 
 class Category:
@@ -206,13 +206,17 @@ class JxMakeflow:
 
         self.environment_obj_lst.append(environment_obj)
 
-    def add_category(self, category_obj: Category):
+    def add_category(self, category_obj: Union[Category, None]):
         """Add a resource category."""
 
-        self.category_obj_lst.append(category_obj)
+        if category_obj is not None:
+            self.category_obj_lst.append(category_obj)
 
     def add_rule(self, rule_obj: Rule):
         """Add a Makeflow rule."""
+
+        if rule_obj.category_obj is not None:
+            self.category_obj_lst.append(rule_obj.category_obj)
 
         self.rule_obj_lst.append(rule_obj)
 

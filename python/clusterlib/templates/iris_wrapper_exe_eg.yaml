@@ -17,7 +17,7 @@ PackageManifest:
     dst_tar_fileP_str: "dst_tar_fileP_str"
     dst_dirP_str: "dst_dirP_str"
     checksum_fileP_str: "checksum_fileP_str"
-IrisWrapperExecute:
+WrapperExecute:
   env_dct:
     env_name: "str"
 ...

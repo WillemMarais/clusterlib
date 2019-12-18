@@ -1,6 +1,6 @@
 # Clusterlib
 
-Clusterlib is a Python package that contains tools that helps with executing Python programs on `iris`.
+Clusterlib is a Python package that contains tools that helps with executing Python programs on cluster computing systems.
 
 ## Modules
 
