@@ -207,9 +207,9 @@ class PickleJobFilepathGenerator:
         pickle_out_dirP_str: str
             TODO"""
 
-        self._pickle_dirP_str = pickle_call_dirP_str
-        self._pickle_call_kwargs_dirP_str = pickle_call_kwargs_dirP_str
-        self._pickle_out_dirP_str = pickle_out_dirP_str
+        self.pickle_dirP_str = pickle_call_dirP_str
+        self.pickle_call_kwargs_dirP_str = pickle_call_kwargs_dirP_str
+        self.pickle_out_dirP_str = pickle_out_dirP_str
 
         # Keep track of the files path that are created to make sure there are no dupblicates
         self._name_group_tpl_dct: Dict[str, int] = dict()
@@ -251,36 +251,36 @@ class PickleJobFilepathGenerator:
         return unique_name_str
 
     def create_pickle_call_fileP_str(self, name_str: str, group_str_lst: Union[List[str], None]) -> str:
-        if self._pickle_dirP_str is None:
+        if self.pickle_dirP_str is None:
             err_str = 'The parameter pickle_call_dirP_str has not been set.'
             raise AssertionError(err_str)
 
         # Create the file path
-        fileP_str = self._create_fileP(self._pickle_dirP_str,
+        fileP_str = self._create_fileP(self.pickle_dirP_str,
                                        'call_' + name_str,
                                        group_str_lst) + '.p'
 
         return fileP_str
 
     def create_pickle_call_kwargs_fileP_str(self, name_str: str, group_str_lst: Union[List[str], None]) -> str:
-        if self._pickle_call_kwargs_dirP_str is None:
+        if self.pickle_call_kwargs_dirP_str is None:
             err_str = 'The parameter pickle_call_kwargs_dirP_str has not been set.'
             raise AssertionError(err_str)
 
         # Create the file path
-        fileP_str = self._create_fileP(self._pickle_call_kwargs_dirP_str,
+        fileP_str = self._create_fileP(self.pickle_call_kwargs_dirP_str,
                                        'call_kwargs_' + name_str,
                                        group_str_lst) + '.p'
 
         return fileP_str
 
     def create_pickle_out_fileP_str(self, name_str: str, group_str_lst: Union[List[str], None]) -> str:
-        if self._pickle_out_dirP_str is None:
+        if self.pickle_out_dirP_str is None:
             err_str = 'The parameter pickle_out_dirP_str has not been set.'
             raise AssertionError(err_str)
 
         # Create the file path
-        fileP_str = self._create_fileP(self._pickle_out_dirP_str,
+        fileP_str = self._create_fileP(self.pickle_out_dirP_str,
                                        'out_' + name_str,
                                        group_str_lst) + '.p'
 
