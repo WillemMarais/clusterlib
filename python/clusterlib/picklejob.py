@@ -187,19 +187,25 @@ class PickleVariable:
 
 
 # ---------------------------------------------------------------------------------------------------------------------
-# ----------------------------------------------------- PickleJob -----------------------------------------------------
+# -------------------------------------------- PickleJobFilepathGenerator  --------------------------------------------
 # -------------------------------------------------       BEGIN       -------------------------------------------------
 # ---------------------------------------------------------------------------------------------------------------------
 class PickleJobFilepathGenerator:
     """Generate file paths for the Pickle job class."""
 
     def __init__(self,
+                 pickle_jar_name_str: str,
+                 pickle_jar_dirP_str: str,
                  pickle_call_dirP_str: str,
                  pickle_call_kwargs_dirP_str: str,
                  pickle_out_dirP_str: str):
         """
         Parameters
         ----------
+        pickle_jar_name_str: str
+            TODO
+        pickle_jar_dirP_str: str
+            TODO
         pickle_call_dirP_str: str
             TODO
         pickle_call_kwargs_dirP_str: str
@@ -207,7 +213,9 @@ class PickleJobFilepathGenerator:
         pickle_out_dirP_str: str
             TODO"""
 
-        self.pickle_dirP_str = pickle_call_dirP_str
+        self.pickle_jar_name_str = pickle_jar_name_str
+        self.pickle_jar_dirP_str = pickle_jar_dirP_str
+        self.pickle_call_dirP_str = pickle_call_dirP_str
         self.pickle_call_kwargs_dirP_str = pickle_call_kwargs_dirP_str
         self.pickle_out_dirP_str = pickle_out_dirP_str
 
@@ -251,12 +259,12 @@ class PickleJobFilepathGenerator:
         return unique_name_str
 
     def create_pickle_call_fileP_str(self, name_str: str, group_str_lst: Union[List[str], None]) -> str:
-        if self.pickle_dirP_str is None:
+        if self.pickle_call_dirP_str is None:
             err_str = 'The parameter pickle_call_dirP_str has not been set.'
             raise AssertionError(err_str)
 
         # Create the file path
-        fileP_str = self._create_fileP(self.pickle_dirP_str,
+        fileP_str = self._create_fileP(self.pickle_call_dirP_str,
                                        'call_' + name_str,
                                        group_str_lst) + '.p'
 
@@ -537,16 +545,29 @@ class PickleJob(PickleJobAbstract):
         """Get the output result of the job."""
 
         # Check if the output file exists; if it does not exists, then throw a BusyError exception
+        if self.check_done() is True:
+            # Copy from remote file system
+            with TFile.TFileFrom(fileP_str=self._pickle_out_fileP_str) as tfile_obj:
+                with open(tfile_obj.local_fileP_str, 'rb') as file_obj:
+                    return_obj = cloudpickle.load(file_obj)
+
+            return return_obj
+
+    def check_done(self):
+        """Get the processing status of this pickle job.
+
+        Raises
+        ------
+        BusyError:
+            If the job is still busy, BusyError is raised.
+        """
+
+        # Check if the output file exists; if it does not exists, then throw a BusyError exception
         if os.path.exists(self._pickle_out_fileP_str) is False:
             err_str = f'Pickle Job {self.name_str} has not produced an output file yet.'
             raise BusyError(err_str)
 
-        # Copy from remote file system
-        with TFile.TFileFrom(fileP_str=self._pickle_out_fileP_str) as tfile_obj:
-            with open(tfile_obj.local_fileP_str, 'rb') as file_obj:
-                return_obj = cloudpickle.load(file_obj)
-
-        return return_obj
+        return True
 
     def create_stage(self,
                      graph_stage_dct: Dict[str, Tuple[StageAbstract, StageAbstractCollection_type]],
@@ -606,7 +627,7 @@ class PickleJob(PickleJobAbstract):
 class PickleJarOfJobs:
     """A jar full of pickle jobs to be executed."""
 
-    def __init__(self, jar_name_str: str, pickle_jar_dirP_str: str):
+    def __init__(self, pickle_job_fgen_obj: PickleJobFilepathGenerator):
         """
 
         Parameters
@@ -617,8 +638,10 @@ class PickleJarOfJobs:
             The directory location where to archive the support files of the job pickel files.
         """
 
-        self.jar_name_str = jar_name_str
-        self.pickle_jar_dirP_str = pickle_jar_dirP_str
+        self.pickle_job_fgen_obj = pickle_job_fgen_obj
+
+        self.jar_name_str = pickle_job_fgen_obj.pickle_jar_name_str
+        self.pickle_jar_dirP_str = pickle_job_fgen_obj.pickle_jar_dirP_str
 
         self._graph_stage_dct = dict()
 
@@ -631,14 +654,14 @@ class PickleJarOfJobs:
             The pickle job object.
         """
 
-        log_dirP_str = os.path.join(self.pickle_jar_dirP_str, self.jar_name_str, 'logging')
+        log_dirP_str = os.path.join(self.pickle_jar_dirP_str, 'logging')
         os.makedirs(log_dirP_str, exist_ok=True)
 
         log_fileN_str = os.path.join(log_dirP_str, pickle_job_obj.name_str) + '.log'
         pickle_job_obj.create_stage(self._graph_stage_dct, log_fileN_str)
 
     def get_makeflow_base_dirP(self) -> str:
-        base_dirP_str = os.path.join(self.pickle_jar_dirP_str, self.jar_name_str, 'makeflow')
+        base_dirP_str = os.path.join(self.pickle_jar_dirP_str, 'makeflow')
 
         return base_dirP_str
 
