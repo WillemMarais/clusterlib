@@ -1,16 +1,19 @@
 import os
 import re
 import copy
+import json
 import secrets
 import cloudpickle
 from inspect import signature
 import clusterlib.file as TFile
+from collections import OrderedDict
 from typing import Any, Callable, Dict, List, Tuple, Union
 from clusterlib.executor import StageAbstract, Stage, StageInputFile, StageOutputFile, StageAbstractCollection_type, \
     MakeflowFromStages
 
 
 HASH_STRING_BYTES_INT = 32
+LIMIT_NUMBER_RECORDED_PICKLES_INT = 1024
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -40,7 +43,8 @@ class PickleJobAbstract:
 # -------------------------------------------------       BEGIN       -------------------------------------------------
 # ---------------------------------------------------------------------------------------------------------------------
 class PickleVariable:
-    def __init__(self, pickle_job_obj: PickleJobAbstract, pckl_parm_fileP_str: str, tpl_idx: Union[int, None] = None):
+    def __init__(self, pickle_job_obj: PickleJobAbstract, pckl_parm_fileP_str: str, tpl_idx: Union[int, None] = None,
+                 hash_key_str: str = None):
         """
         Parameters
         ----------
@@ -50,12 +54,28 @@ class PickleVariable:
             The file location where output parameters are pickeled.
         tpl_idx: int
             The tuple output number that is selected.
+        hash_key_str: str
+            The hash key of this variable.
         """
 
         self.pickle_job_obj = pickle_job_obj
         self.pckl_parm_fileP_str = pckl_parm_fileP_str
         self.tpl_idx = tpl_idx
-        self.hash_key_str = None
+        self.hash_key_str = hash_key_str
+
+    def to_json(self):
+        return_dct = {
+            'pickle_job_obj': None,
+            'pckl_parm_fileP_str': self.pckl_parm_fileP_str,
+            'tpl_idx': self.tpl_idx,
+            'hash_key_str': self.hash_key_str
+        }
+
+        return return_dct
+
+    @staticmethod
+    def from_json(kwargs):
+        return PickleVariable(**kwargs)
 
     def _assert_hash_key(self):
         if self.hash_key_str is None:
@@ -63,12 +83,14 @@ class PickleVariable:
             raise ValueError(err_str)
 
     def set_hash_key(self, hash_str: str = None):
-        if self.hash_key_str is not None:
-            err_str = 'The has key has already been set.'
-            raise ValueError(err_str)
+        # if self.hash_key_str is not None:
+        #     err_str = 'The has key has already been set.'
+        #     raise ValueError(err_str)
 
-        if hash_str is None:
-            hash_str = secrets.token_hex(HASH_STRING_BYTES_INT)
+        # if hash_str is None:
+        #     hash_str = secrets.token_hex(HASH_STRING_BYTES_INT)
+
+        hash_str = secrets.token_hex(HASH_STRING_BYTES_INT)
 
         self.hash_key_str = hash_str
 
@@ -187,11 +209,31 @@ class PickleVariable:
 
 
 # ---------------------------------------------------------------------------------------------------------------------
-# -------------------------------------------- PickleJobFilepathGenerator  --------------------------------------------
+# --------------------------------------------------- JSON Encoder  ---------------------------------------------------
 # -------------------------------------------------       BEGIN       -------------------------------------------------
 # ---------------------------------------------------------------------------------------------------------------------
-class PickleJobFilepathGenerator:
-    """Generate file paths for the Pickle job class."""
+class PickleVariableJSONEncoder(json.JSONEncoder):
+    def default(self, obj):  # pylint: disable=method-hidden
+        if isinstance(obj, PickleVariable) is True:
+            return dict(PickleVariable=obj.to_json())
+
+        # Let the base class default method raise the TypeError
+        return json.JSONEncoder.default(self, obj)
+
+    @classmethod
+    def decode(cls, dct):
+        if 'PickleVariable' in dct:
+            return PickleVariable.from_json(dct['PickleVariable'])
+
+        return dct
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# ------------------------------------------------ PickleJobOrganizer  ------------------------------------------------
+# -------------------------------------------------       BEGIN       -------------------------------------------------
+# ---------------------------------------------------------------------------------------------------------------------
+class PickleJobOrganizer:
+    """Generate file paths for the Pickle job class and get a list of pickled objects."""
 
     def __init__(self,
                  pickle_jar_name_str: str,
@@ -221,6 +263,9 @@ class PickleJobFilepathGenerator:
 
         # Keep track of the files path that are created to make sure there are no dupblicates
         self._name_group_tpl_dct: Dict[str, int] = dict()
+
+        # Keep track of the pickle file paths
+        self._pickle_fileP_dct = OrderedDict()
 
     @staticmethod
     def _create_group_dirP_str(group_str_lst: Union[List[str], None]) -> str:
@@ -258,15 +303,34 @@ class PickleJobFilepathGenerator:
 
         return unique_name_str
 
-    def create_pickle_call_fileP_str(self, name_str: str, group_str_lst: Union[List[str], None]) -> str:
-        if self.pickle_call_dirP_str is None:
-            err_str = 'The parameter pickle_call_dirP_str has not been set.'
-            raise AssertionError(err_str)
+    def create_pickle_call_fileP_str(self,
+                                     pickle_obj: object,
+                                     name_str: str,
+                                     group_str_lst: Union[List[str], None]) -> str:
+        """Returns the file path of where to archive the pickled object."""
 
-        # Create the file path
-        fileP_str = self._create_fileP(self.pickle_call_dirP_str,
-                                       'call_' + name_str,
-                                       group_str_lst) + '.p'
+        # Get the hash code of the object that will be pickled
+        hash_of_pckl_int = hash(pickle_obj)
+
+        # Check if the pickle file path has already being created
+        if hash_of_pckl_int in self._pickle_fileP_dct:
+            fileP_str = self._pickle_fileP_dct[hash_of_pckl_int]
+        else:
+            if self.pickle_call_dirP_str is None:
+                err_str = 'The parameter pickle_call_dirP_str has not been set.'
+                raise AssertionError(err_str)
+
+            # Create the file path
+            fileP_str = self._create_fileP(self.pickle_call_dirP_str,
+                                           'call_' + name_str,
+                                           group_str_lst) + '.p'
+
+            self._pickle_fileP_dct[hash_of_pckl_int] = fileP_str
+
+        # Make sure that there are only LIMIT_NUMBER_RECORDED_PICKLES_INT entries in the self._pickle_fileP_dct
+        # dictionary
+        if len(self._pickle_fileP_dct) > LIMIT_NUMBER_RECORDED_PICKLES_INT:
+            self._pickle_fileP_dct.popitem(last=False)
 
         return fileP_str
 
@@ -278,7 +342,7 @@ class PickleJobFilepathGenerator:
         # Create the file path
         fileP_str = self._create_fileP(self.pickle_call_kwargs_dirP_str,
                                        'call_kwargs_' + name_str,
-                                       group_str_lst) + '.p'
+                                       group_str_lst) + '.json'
 
         return fileP_str
 
@@ -309,10 +373,11 @@ class PickleJob(PickleJobAbstract):
                  name_str: str,
                  call_obj: Callable,
                  call_kwargs: Dict[str, Any],
-                 fileP_gen_obj: PickleJobFilepathGenerator,
+                 fileP_gen_obj: PickleJobOrganizer,
                  nr_cores_int: int = 1,
                  mem_MB_int: int = 1024,
-                 group_str_lst: Union[List[str], None] = None):
+                 group_str_lst: Union[List[str], None] = None,
+                 overwrite_bl: bool = False):
         """
 
         Parameters
@@ -323,7 +388,7 @@ class PickleJob(PickleJobAbstract):
             The function/method that will be called.
         call_kwargs: dict
             The keyword arguments that will be passed to the function/method.
-        fileP_gen_obj: PickleJobFilepathGenerator
+        fileP_gen_obj: PickleJobOrganizer
             File path generator.
         nr_cores_int: int
             The number of CPU cores for the process; default is 1.
@@ -331,15 +396,20 @@ class PickleJob(PickleJobAbstract):
             The amount of mega-bytes of memory that is available for the process; default is 1 GB.
         group_str_lst: list of str
             TODO
+        overwrite_bl: bool
+            If True and if the pickel file already exists, overwrite the pickel file.
         """
 
         super(PickleJob, self).__init__(nr_cores_int, mem_MB_int)
+
+        # Set the overwrite parameter
+        self._overwrite_bl = overwrite_bl
 
         # Create a unique name
         self.name_str = fileP_gen_obj.create_unique_name(name_str, group_str_lst)
 
         # Record the pickle file path and the output file path
-        self._pickle_call_fileP_str = fileP_gen_obj.create_pickle_call_fileP_str(name_str, group_str_lst)
+        self._pickle_call_fileP_str = fileP_gen_obj.create_pickle_call_fileP_str(call_obj, name_str, group_str_lst)
         self._pickle_call_kwargs_fileP_str = fileP_gen_obj.create_pickle_call_kwargs_fileP_str(name_str, group_str_lst)
         self._pickle_out_fileP_str = fileP_gen_obj.create_pickle_out_fileP_str(name_str, group_str_lst)
 
@@ -352,7 +422,7 @@ class PickleJob(PickleJobAbstract):
         self.__check_output_parm_signature()
 
         # Pickle the callable object
-        self._pickle(self._pickle_call_fileP_str, self._call_obj)
+        self._pickle(self._pickle_call_fileP_str, self._call_obj, overwrite_bl=False)
 
         # Prepare the for the Stage object creation
         input_parm_obj_dct, depend_pickle_job_obj_lst = self.__create_stage_input_parm_obj_dct()
@@ -464,13 +534,14 @@ class PickleJob(PickleJobAbstract):
         input_parm_obj_dct['stage_input_file_obj_dct'] = dict()
         input_parm_obj_dct['index_tuple_dct'] = dict()
 
-        input_kwargs_dct = copy.deepcopy(self._call_kwargs)
+        # input_kwargs_dct = copy.deepcopy(self._call_kwargs)
+        input_kwargs_dct = copy.copy(self._call_kwargs)
         PickleVariable.expand_pickle_variables(input_kwargs_dct,
                                                input_parm_obj_dct['stage_input_file_obj_dct'],
                                                input_parm_obj_dct['index_tuple_dct'],
                                                depend_pickle_job_obj_lst)
 
-        self._pickle(self._pickle_call_kwargs_fileP_str, input_kwargs_dct)
+        self._pickle(self._pickle_call_kwargs_fileP_str, input_kwargs_dct, self._overwrite_bl)
 
         return input_parm_obj_dct, depend_pickle_job_obj_lst
 
@@ -484,11 +555,22 @@ class PickleJob(PickleJobAbstract):
         return output_file_dct
 
     @staticmethod
-    def _pickle(pickle_fileP_str: str, pickle_obj: object):
+    def _pickle(pickle_fileP_str: str, pickle_obj: object, overwrite_bl: bool):
         """Pickle the job dictionary."""
 
-        with open(pickle_fileP_str, 'wb') as file_obj:
-            cloudpickle.dump(pickle_obj, file_obj)
+        if (os.path.exists(pickle_fileP_str) is True) and (overwrite_bl is False):
+            return None
+
+        # Check the extention of the file; if the extention is json, then we serialize with json otherwise with pickle
+        json_bl = pickle_fileP_str.split('.')[-1].lower() == 'json'
+
+        with TFile.TFileTo(pickle_fileP_str) as tfile_obj:
+            if json_bl is False:
+                with open(tfile_obj.local_fileP_str, 'wb') as file_obj:
+                    cloudpickle.dump(pickle_obj, file_obj)
+            else:
+                with open(tfile_obj.local_fileP_str, 'w') as file_obj:
+                    json.dump(pickle_obj, file_obj, indent='\t', cls=PickleVariableJSONEncoder)
 
     def __getitem__(self, idx: int) -> PickleVariable:
         """Get output of the Pickled Job.
@@ -564,7 +646,7 @@ class PickleJob(PickleJobAbstract):
 
         # Check if the output file exists; if it does not exists, then throw a BusyError exception
         if os.path.exists(self._pickle_out_fileP_str) is False:
-            err_str = f'Pickle Job {self.name_str} has not produced an output file yet.'
+            err_str = f'Pickle Job {self.name_str} has not produced an output file {self._pickle_out_fileP_str} yet.'
             raise BusyError(err_str)
 
         return True
@@ -627,7 +709,7 @@ class PickleJob(PickleJobAbstract):
 class PickleJarOfJobs:
     """A jar full of pickle jobs to be executed."""
 
-    def __init__(self, pickle_job_fgen_obj: PickleJobFilepathGenerator):
+    def __init__(self, pickle_job_fgen_obj: PickleJobOrganizer):
         """
 
         Parameters
@@ -745,9 +827,15 @@ def pickle_job_execute(pickle_call_fileP_str: str,
     with open(pickle_call_fileP_str, 'rb') as file_obj:
         call_obj = cloudpickle.load(file_obj)
 
-    # Load the pickled kwargs dictionary for the callable object
-    with open(pickle_call_kwargs_fileP_str, 'rb') as file_obj:
-        call_input_kwargs_dct = cloudpickle.load(file_obj)
+    # Load the pickled kwargs dictionary for the callable object; first check the extention of the file: if the
+    # extention is json, then we de-serialize with json otherwise with pickle
+    json_bl = pickle_call_kwargs_fileP_str.split('.')[-1].lower() == 'json'
+    if json_bl is True:
+        with open(pickle_call_kwargs_fileP_str, 'r') as file_obj:
+            call_input_kwargs_dct = json.load(file_obj, object_hook=PickleVariableJSONEncoder.decode)
+    else:
+        with open(pickle_call_kwargs_fileP_str, 'rb') as file_obj:
+            call_input_kwargs_dct = cloudpickle.load(file_obj)
 
     # Replace the PickleVariable object inside of "call_input_kwargs_dct" with loaded pickled values
     call_input_kwargs_dct = PickleVariable.contract_pickle_variables(call_input_kwargs_dct,
